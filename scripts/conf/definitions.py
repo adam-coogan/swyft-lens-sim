@@ -13,7 +13,7 @@ import swyft
 
 """
 
-Prior, simulator and noise function definitions for lensing analysis.
+Prior, model and noise function definitions for lensing analysis.
 
 Running this file will run some basic tests. This should produce a file called
 `resids.png` and print out the guide, which should be:
@@ -41,9 +41,9 @@ def get_config():
     config = load_config(os.path.join(BASE_DIR, 'config-sh.yaml'), base_dir=BASE_DIR)
     model = config.umodel
 
-    model.sources['src'] = config.kwargs['defs']['src']
-    model.sources['gp'] = config.kwargs['defs']['gp']
-    model.alphas['main'].stochastic_specs['slope'] = PARAMS['truth']['main/slope']
+    config.umodel.sources['src'] = config.kwargs['defs']['src']
+    config.umodel.sources['gp'] = config.kwargs['defs']['gp']
+    config.umodel.alphas['main'].stochastic_specs['slope'] = PARAMS['truth']['main/slope']
 
     config.guide.setup()
     config.guide = torch.load(os.path.join(BASE_DIR, f'guide-{SYSTEM_NAME}-fixed-final.pt'))
@@ -73,7 +73,7 @@ def get_prior(config):
     })
 
 
-def simulator(params):
+def model(params):
     """
     Sample from the config's PPD, potentially with some parameters fixed, and put
     in a subhalo.
@@ -172,6 +172,9 @@ config = get_config()
 prior = get_prior(config)
 sigma_n = config.umodel.stochastic_specs['sigma_stat']
 
+par0 = {k: float(v) for k, v in prior.sample(1).items()}
+obs0 = noise(model(par0))
+
 
 if __name__ == "__main__":
     from definitions import *
@@ -189,14 +192,14 @@ if __name__ == "__main__":
     head = CustomHead(config.umodel.X.shape)
     single_sample = {
         k: torch.tensor(v).unsqueeze(0)
-        for k, v in simulator(prior.sample(1)).items()
+        for k, v in model(prior.sample(1)).items()
     }
     print(head(single_sample))
     print("Shape:", head(single_sample).shape, "\n")
 
     print("Guide:\n", config.guide, "\n")
 
-    pred = np.stack([simulator(prior.sample(1))["mu"] for i in range(n_ppd)], 0).mean(0)
+    pred = np.stack([model(prior.sample(1))["mu"] for i in range(n_ppd)], 0).mean(0)
     OBS = config.conditioning['image'].numpy()
     MASK = config.kwargs['defs']['mask'].numpy()
     err = np.ma.array((pred - OBS) / sigma_n, mask=~MASK)
