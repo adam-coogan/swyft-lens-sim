@@ -1,6 +1,6 @@
 # swyft-lens-sim
 
-Minimal lensing simulator for coupling to swyft.
+Minimal lensing simulator for coupling to swyft. See `simulator.ipynb` for details.
 
 ## Dependencies
 
