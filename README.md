@@ -1,6 +1,6 @@
 # swyft-lens-sim
 
-Minimal lensing simulator for coupling to swyft. See `simulator`, `noise` and `prior` in simulator.ipynb for details.
+Minimal lensing simulator for coupling to swyft. See `simulator`, `noise`, `prior`, `Head` and the docstrings in scripts/conf/definitions.py for details. Setting up the simulator requires the files in scripts/conf/resources.
 
 ## Dependencies
 
