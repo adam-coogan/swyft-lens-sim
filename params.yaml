@@ -1,0 +1,109 @@
+antennae:
+  scale: 1.2
+  truth:
+    ext/gamma_1: -0.0146
+    ext/gamma_2: -0.0512
+    main/phi: -2.9560
+    main/q: 0.3928
+    main/r_ein: 1.2161
+    main/slope: 2.4765
+    main/x: -0.0250
+    main/y: -0.0642
+  init:
+    ext/gamma_1: 0.
+    ext/gamma_2: 0.
+    main/phi: -2.5
+    main/q: 0.5
+    main/r_ein: 1.2
+    main/slope: 2.
+    main/x: 0.
+    main/y: 0.
+arp142:
+  scale: 1.0
+  truth:
+    ext/gamma_1: 0.0443
+    ext/gamma_2: 0.0069
+    main/phi: -3.0506
+    main/q: 0.8719
+    main/r_ein: 1.3610
+    main/slope: 2.2335
+    main/x: 0.0102
+    main/y: -0.0202
+  init:
+    ext/gamma_1: 0.
+    ext/gamma_2: 0.
+    main/phi: -3.
+    main/q: 0.75
+    main/r_ein: 1.3
+    main/slope: 2.
+    main/x: 0.
+    main/y: 0.
+#arp147:
+#  ext/gamma_1: 0.0070
+#  ext/gamma_2: 0.0100
+#  main/phi: 1.
+#  main/q: 0.75
+#  main/r_ein: 1.5
+#  main/slope: 2.1
+#  main/x: -0.05
+#  main/y: 0.1
+arp148:
+  scale: 1.2
+  truth:
+    ext/gamma_1: -0.01
+    ext/gamma_2: 0.003
+    main/phi: 0.2
+    main/q: 0.5
+    main/r_ein: 1.3
+    main/slope: 2.4
+    main/x: 0.08
+    main/y: -0.01
+  init:
+    ext/gamma_1: 0.
+    ext/gamma_2: 0.
+    main/phi: 0.3
+    main/q: 0.42
+    main/r_ein: 1.25
+    main/slope: 2.
+    main/x: 0.
+    main/y: 0.
+hoags_object:
+  scale: 1.0
+  truth:
+    ext/gamma_1: -0.0227
+    ext/gamma_2: 0.0047
+    main/phi: 1.7420
+    main/q: 0.2753
+    main/r_ein: 1.1847
+    main/slope: 2.2193
+    main/x: -0.0704
+    main/y: -0.0193
+  init:
+    ext/gamma_1: 0.
+    ext/gamma_2: 0.
+    main/phi: 1.5
+    main/q: 0.3
+    main/r_ein: 1.2
+    main/slope: 2.
+    main/x: 0.
+    main/y: 0.
+neurips:
+  scale: 1.
+  truth:
+    ext/gamma_1: 0.0070
+    ext/gamma_2: 0.0100
+    main/phi: 1.
+    main/q: 0.75
+    main/r_ein: 1.5
+    main/slope: 2.1
+    main/x: -0.05
+    main/y: 0.1
+  init:
+    ext/gamma_1: 0.
+    ext/gamma_2: 0.
+    main/phi: 0.5
+    main/q: 0.5
+    main/r_ein: 1.42
+    main/slope: 2.
+    main/x: 0.
+    main/y: 0.

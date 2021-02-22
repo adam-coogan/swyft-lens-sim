@@ -1,0 +1,123 @@
+imports: !import
+  - numpy as np # np.geomspace
+  - from pyro import distributions as dist
+  - from pyrofit.lensing.utils import get_meshgrid
+  - {from: pyrofit.lensing.model, import: LensingModelBase}
+  - {from: pyrofit.lensing.lenses, import: [
+          SPLEwithSubhaloes, SmoothMeshSubhaloes, SPLELens, ExternalShear, NFWLens
+      ]
+    }
+  - {from: pyrofit.lensing.sources, import: [UnitPriorGPSource, UnitPriorWindowedGPSource]}
+defs:
+  res: &res 0.0125
+  nx: &nx 400
+  ny: &ny 400
+  XY: !py:get_meshgrid &XY [*res, *nx, *ny]
+  mask: !tensor &mask [!npy mask.npy]
+# ---
+  src: !Stochastic:src
+    - !py:UnitPriorGPSource
+      # inducing points as an [N, 2] array
+      q: !py:torch.flatten {__args: [!py:torch.stack {__args: [!py:get_meshgrid [.03, 40, 40]], dim: -1}], end_dim: -2}
+    - theta: !InfiniteSampler
+        init: !py:torch.zeros [1600]
+        expand_by: [1600]
+      alpha: !SemiInfiniteSampler
+        init: 10.  # because the mocks' peak_intensity is 30
+      sigma: 0.04
+# ---
+  ngplayers: &ngplayers ${ngplayers=(2)}
+  gp: !Stochastic:gp
+    - !py:UnitPriorWindowedGPSource {mask: *mask}
+    - sigma: !py:np.geomspace [0.01, 0.002, *ngplayers]
+      alpha: !InfiniteSampler
+        expand_by: !py:torch.Size [[*ngplayers]]
+        init: 1.0
+      theta: !InfiniteSampler
+        init: !py:torch.zeros [*ngplayers, *ny, *nx]
+        mask: *mask
+        expand_by: !py:torch.Size [[*ngplayers, *ny, *nx]]
+      multilayer: True
+model: !Stochastic
+  - !py:LensingModelBase
+    __args: *XY
+    alphas:
+      ext: !Stochastic:ext
+        - !py:ExternalShear []
+        - gamma_1: !Sampler [!py:dist.Normal [0., 0.05]]
+          gamma_2: !Sampler [!py:dist.Normal [0., 0.05]]
+      # main: !Stochastic:main
+      #   - !py:SPLELens [] # https://arxiv.org/pdf/0805.1931.pdf
+      #   - phi:   !InfiniteSampler []
+      #     q:     !Sampler [!py:dist.Uniform [0.1, 1.]]
+      #     r_ein: !Sampler [!py:dist.Uniform [1, 1.7]]
+      #     slope: !Sampler [!py:dist.Uniform [1.5, 3.]]
+      #     x:     !Sampler [!py:dist.Uniform [-0.2, 0.2]]
+      #     y:     !Sampler [!py:dist.Uniform [-0.2, 0.2]]
+      main: !Stochastic:main
+        - !py:SPLEwithSubhaloes # https://arxiv.org/pdf/0805.1931.pdf
+          z_lens: &z_lens 0.5
+          z_src: &z_src 2.
+          fsub: 0.05 # should have no effect
+          vary_nsub: False
+          sub: !Stochastic:sub
+            - !py:SmoothMeshSubhaloes
+              lens: !py:NFWLens
+                z_lens: *z_lens
+                z_src: *z_src
+              extent_space: 5.
+              range_mass: [7., 13.]
+              m_smooth: 1.
+              # Single subhalo within image grid
+              nsub: 1 # number of subhalos within image grid
+              pos_sampler: !eval dist.Uniform(torch.tensor([-2., -2.]), torch.tensor([2., 2.])).to_event(1)
+              mass_sampler: !eval dist.TransformedDistribution(dist.Uniform(8.5, 10.5), [dist.transforms.AffineTransform(0., np.log(10)), dist.transforms.ExpTransform()])
+            - {}
+        - phi:   !InfiniteSampler []
+          q:     !Sampler [!py:dist.Uniform [0.1, 1.]]
+          r_ein: !Sampler [!py:dist.Uniform [1, 1.7]]
+          slope: !Sampler [!py:dist.Uniform [1.5, 3.]]
+          x:     !Sampler [!py:dist.Uniform [-0.2, 0.2]]
+          y:     !Sampler [!py:dist.Uniform [-0.2, 0.2]]
+    sources: {}
+  - sigma_stat: ${sigma_stat=(1)}
+    model_err: 0.
+conditioning:
+  image: !pt [mock_sigma_stat=${sigma_stat=(1)}.pt, obs]
+guide:
+  - cls: DeltaSamplingGroup
+    match: gp/alpha
+    name: gp_alpha
+  - cls: DiagonalNormalSamplingGroup
+    init_scale: 0.001
+    match: gp/.*
+    name: gp
+  - cls: DeltaSamplingGroup
+    match: src/alpha
+    name: src_alpha
+  - cls: PartialMultivariateNormalSamplingGroup
+    init_scale_full: 0.01
+    init_scale_diag: 0.01
+    diag: src/theta
+    name: g
+#   Nothing left beyond this point if PMVN is active
+  - cls: DiagonalNormalSamplingGroup
+    init_scale: 0.01
+    match: src/.*
+    name: src
+  - cls: MultivariateNormalSamplingGroup
+    init_scale: 0.01
+    name: lens
+fit:
+  lr: 1e-2
+  optimizer_cls: !py:scheduled_optimizer
+    lr_scheduler_cls: !py:torch.optim.lr_scheduler.ReduceLROnPlateau
+    optimizer_cls: !py:torch.optim.Adam
+    factor: 0.1
+    cooldown: 2000
+    patience: 1000
+    min_lr: 1e-4
+    threshold: 10
+    threshold_mode: abs
+    verbose: True
+  callback: !py:scheduled_optimizer_callback_with_loss
