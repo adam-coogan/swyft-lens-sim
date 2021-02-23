@@ -256,8 +256,8 @@ if __name__ == "__main__":
         fig, animate_func, frames=duration * fps, interval=1000 / fps  # ms
     )
 
-    anim.save("simulator_samples.gif", fps=fps)
+    anim.save("samples.gif", fps=fps)
 
-    print("Saved animation to simulator_samples.gif.\n")
+    print("Saved animation to samples.gif.\n")
 
     print("Done.")
