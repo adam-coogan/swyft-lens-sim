@@ -1,6 +1,6 @@
 # swyft-lens-sim
 
-![Lensing simulator samples](https://github.com/adam-coogan/swyft-lens-sim/blob/master/simulator_samples.gif)
+![Lensing simulator samples](https://github.com/adam-coogan/swyft-lens-sim/blob/master/resources/samples.gif)
 
 Minimal lensing model for coupling to swyft. See `model`, `noise`, `prior`, `Head` and the docstrings in scripts/conf/definitions.py for details. Setting up the model requires the files in scripts/conf/resources.
 
