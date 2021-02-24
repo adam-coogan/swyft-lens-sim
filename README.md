@@ -2,27 +2,20 @@
 
 ![Lensing simulator samples](https://github.com/adam-coogan/swyft-lens-sim/blob/master/resources/samples.gif)
 
-Minimal lensing model for coupling to swyft. See `model`, `noise`, `prior`, `Head` and the docstrings in scripts/conf/definitions.py for details. Setting up the model requires the files in scripts/conf/resources.
+Minimal lensing model for coupling to swyft. See scripts/conf/definitions.py for details. The model requires the files in scripts/conf/resources.
 
 ## Dependencies
 
-### External
+* A GPU with cuda/cuDNN, gcc and cmake
+* [torchinterp1d](https://github.com/aliutkus/torchinterp1d): clone and install with `pip install .`.
 
-* Cuda/cuDNN, gcc and cmake
-* [torchinterp1d](https://github.com/aliutkus/torchinterp1d): clone, `cd` into the directory and install with `pip install .`.
+Clone these and install with `pip install .`:
+* [clipppy](https://github.com/kosiokarchev/clipppy/)
+* [pyrofit-utils](https://github.com/kosiokarchev/pyrofit-utils)
+* [pyrofit_lensing](https://github.com/cweniger/pyrofit_lensing), `production` branch: the lensing code. To install dependencies for notebooks in the experiments directory, run `pip install -r requirements.txt` in the root directory of the repository.
 
-### Our repositories
+## Possible issues
 
-Clone these and install with `pip install .`.
-* [clipppy](https://github.com/kosiokarchev/clipppy/): a wrapper around pyro.
-* [pyrofit-utils](https://github.com/kosiokarchev/pyrofit-utils): utilities for probabilistic programming in the pytorch ecosystem.
-* [pyrofit_lensing](https://github.com/cweniger/pyrofit_lensing): this contains all the lensing-specific code, data and notebooks. Use the `production` branch. The installation does not install everything required to run the code in `experiments`. To install their dependencies, run `pip install -r requirements.txt`.
-
-### Possible issues
-
-* The most annoying dependency is keops. You can test whether your installation is working by following [these instructions](https://www.kernel-operations.io/keops/python/installation.html#testing-your-installation).
-* The first time you run the lensing code, keops has to compile a bunch of cuda code. This takes a while, so if you're running on a Lisa login node your job might get killed before compilation finishes. In this case you may get weird errors when you rerun the code. These can usually be fixed by clearing the keops cache (`import pykeops`, `pykeops.clean_pykeops()`) and running the code on a compute node so your job won't get killed.
-
-## Notes
-
-Currently clipppy does not take a `device` argument, and instead uses `torch.set_default_tensor_type` to decide when to use CUDA vs CPU tensors. As a result, `simulator` switches the default tensor type at the beginning and end of the function.
+* The keops compilation required the first time the model runs takes a while (≥ minutes, ≤ 1 hour). If the job is interrupted during compilation, you may get errors when you rerun the code. To fix these, clear the keops cache with `import pykeops` and `pykeops.clean_pykeops()`.
+* You can test your keops installation using [these instructions](https://www.kernel-operations.io/keops/python/installation.html#testing-your-installation).
+* Currently clipppy does not take a `device` argument, and uses `torch.set_default_tensor_type` to decide when to use CUDA vs CPU tensors. As a result, `simulator` switches the default tensor type at the beginning and end of the function. This has not been an issue so far, but is worth keeping in mind.
