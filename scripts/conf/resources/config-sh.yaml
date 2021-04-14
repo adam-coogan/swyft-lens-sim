@@ -2,12 +2,10 @@ imports: !import
   - numpy as np # np.geomspace
   - from pyro import distributions as dist
   - from pyrofit.lensing.utils import get_meshgrid
-  - {from: pyrofit.lensing.model, import: LensingModelBase}
-  - {from: pyrofit.lensing.lenses, import: [
-          SPLEwithSubhaloes, SmoothMeshSubhaloes, SPLELens, ExternalShear, NFWLens
-      ]
-    }
-  - {from: pyrofit.lensing.sources, import: [UnitPriorGPSource, UnitPriorWindowedGPSource]}
+  - from pyrofit.lensing.model import LensingModelBase
+  - from pyrofit.lensing.lenses import ExternalShear, SPLEwithHaloes, KeOpsNFWSubhaloes
+  - from pyrofit.lensing.sources import UnitPriorGPSource, UnitPriorWindowedGPSource
+  - from pyrofit.lensing.distributions import get_default_shmf
 defs:
   res: &res 0.0125
   nx: &nx 400
@@ -46,32 +44,19 @@ model: !Stochastic
         - !py:ExternalShear []
         - gamma_1: !Sampler [!py:dist.Normal [0., 0.05]]
           gamma_2: !Sampler [!py:dist.Normal [0., 0.05]]
-      # main: !Stochastic:main
-      #   - !py:SPLELens [] # https://arxiv.org/pdf/0805.1931.pdf
-      #   - phi:   !InfiniteSampler []
-      #     q:     !Sampler [!py:dist.Uniform [0.1, 1.]]
-      #     r_ein: !Sampler [!py:dist.Uniform [1, 1.7]]
-      #     slope: !Sampler [!py:dist.Uniform [1.5, 3.]]
-      #     x:     !Sampler [!py:dist.Uniform [-0.2, 0.2]]
-      #     y:     !Sampler [!py:dist.Uniform [-0.2, 0.2]]
       main: !Stochastic:main
-        - !py:SPLEwithSubhaloes # https://arxiv.org/pdf/0805.1931.pdf
+        - !py:SPLEwithHaloes
           z_lens: &z_lens 0.5
           z_src: &z_src 2.
-          fsub: 0.05 # should have no effect
-          vary_nsub: False
           sub: !Stochastic:sub
-            - !py:SmoothMeshSubhaloes
-              lens: !py:NFWLens
-                z_lens: *z_lens
-                z_src: *z_src
-              extent_space: 5.
-              range_mass: [7., 13.]
-              m_smooth: 1.
-              # Single subhalo within image grid
-              nsub: 1 # number of subhalos within image grid
-              pos_sampler: !eval dist.Uniform(torch.tensor([-2., -2.]), torch.tensor([2., 2.])).to_event(1)
-              mass_sampler: !eval dist.TransformedDistribution(dist.Uniform(8.5, 10.5), [dist.transforms.AffineTransform(0., np.log(10)), dist.transforms.ExpTransform()])
+            - !py:KeOpsNFWSubhaloes
+              nsub: 1
+              z_lens: *z_lens
+              z_src: *z_src
+              pos_sampler: !eval dist.Uniform(torch.tensor(-2.5), torch.tensor(2.5)).expand([2]).to_event(1)
+              c_200c_sampler: 15.
+              # Only the range matters since it sets the simulator's prior:
+              mass_sampler: !py:get_default_shmf {z_lens: *z_lens, log_range: [8.5, 10.5]}
             - {}
         - phi:   !InfiniteSampler []
           q:     !Sampler [!py:dist.Uniform [0.1, 1.]]
@@ -100,14 +85,15 @@ guide:
     init_scale_diag: 0.01
     diag: src/theta
     name: g
+    exclude: main/sub/.*
 #   Nothing left beyond this point if PMVN is active
-  - cls: DiagonalNormalSamplingGroup
-    init_scale: 0.01
-    match: src/.*
-    name: src
-  - cls: MultivariateNormalSamplingGroup
-    init_scale: 0.01
-    name: lens
+# - cls: DiagonalNormalSamplingGroup
+#   init_scale: 0.01
+#   match: src/.*
+#   name: src
+# - cls: MultivariateNormalSamplingGroup
+#   init_scale: 0.01
+#   name: lens
 fit:
   lr: 1e-2
   optimizer_cls: !py:scheduled_optimizer

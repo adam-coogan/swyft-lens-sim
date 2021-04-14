@@ -63,21 +63,26 @@ def get_prior(config):
     """
     main = config.umodel.alphas["main"]
     prior_p_sub = main.sub.pos_sampler.base_dist
-    prior_log10_m_sub = main.sub.mass_sampler.base_dist
-    return swyft.Prior(
-        {
-            "x_sub": ["uniform", prior_p_sub.low[0].cpu(), prior_p_sub.high[0].cpu()],
-            "y_sub": ["uniform", prior_p_sub.low[1].cpu(), prior_p_sub.high[1].cpu()],
-            "log10_m_sub": [
-                "uniform",
-                prior_log10_m_sub.low.cpu(),
-                prior_log10_m_sub.high.cpu(),
-            ],
-        }
+    # prior_log10_m_sub = main.sub.mass_sampler.base_dist
+    m_sub_grid = main.sub.mass_sampler.y
+    lows = np.array(
+        [
+            prior_p_sub.low[0].item(),
+            prior_p_sub.low[1].item(),
+            m_sub_grid.min().log10().item(),
+        ]
     )
+    highs = np.array(
+        [
+            prior_p_sub.high[0].item(),
+            prior_p_sub.high[1].item(),
+            m_sub_grid.max().log10().item(),
+        ]
+    )
+    return swyft.Prior.from_uv(lambda u: (highs - lows) * u + lows, 3)
 
 
-def model(params):
+def model(v):
     """
     Sample from the config's PPD, potentially with some parameters fixed, and put
     in a subhalo.
@@ -85,31 +90,31 @@ def model(params):
     Requires the global variable `config` to be set.
 
     Arguments
-    - params: dict containing keys "x_sub", "y_sub", "log10_m_sub" whose values can
-      be converted to floats.
+    - v: array containing x_sub, y_sub and log10_m_sub.
 
     Returns
     - Numpy array. Could return a torch.Tensor if that would be more convenient.
     """
     torch.set_default_tensor_type(torch.cuda.FloatTensor)  # HACK
 
-    x_sub, y_sub, log10_m_sub = itemgetter("x_sub", "y_sub", "log10_m_sub")(
-        {k: float(v) for k, v in params.items()}
-    )
-    d_m_sub = dist.Delta(torch.tensor(10 ** log10_m_sub))
+    # x_sub, y_sub, log10_m_sub = itemgetter("x_sub", "y_sub", "log10_m_sub")(
+    #     {k: float(v) for k, v in v.items()}
+    # )
+    x_sub, y_sub, log10_m_sub = np.squeeze(v.T)  # ???
+    d_m_sub = dist.Delta(torch.tensor([10 ** log10_m_sub]))
     d_p_sub = dist.Delta(torch.tensor([x_sub, y_sub])).to_event(1)
 
     def _guide():
         # Sample subhalo guide
-        m_sub = pyro.sample("main/sub/m_sub", d_m_sub)
-        p_sub = pyro.sample("main/sub/p_sub", d_p_sub)
+        pyro.sample("main/sub/m_sub", d_m_sub)
+        pyro.sample("main/sub/p_sub", d_p_sub)
         # Sample from lens and source-plane GP guide
         config.guide.g()
         # Sample from image-plane GP guide
         config.guide.gp()
 
     result = {
-        "mu": config.ppd(guide=_guide)["model_trace"]
+        "image": config.ppd(guide=_guide)["model_trace"]
         .nodes["mu"]["value"]
         .detach()
         .numpy()
@@ -120,17 +125,17 @@ def model(params):
     return result
 
 
-def noise(obs, params=None):
+def noise(obs, v=None):
     """
     Noise model: adds Gaussian pixel noise to the image with the level specified
     when the config is loaded above.
 
     Requires the global variable `sigma_n` to be set.
     """
-    mu = obs["mu"]
-    eps = np.random.randn(*mu.shape) * sigma_n
+    image = obs["image"]
+    eps = np.random.randn(*image.shape) * sigma_n
 
-    return {"mu": mu + eps}
+    return {"image": image + eps}
 
 
 class CustomHead(swyft.Module):
@@ -167,7 +172,7 @@ class CustomHead(swyft.Module):
         )
 
     def forward(self, obs):
-        x = obs["mu"].unsqueeze(1)  # add channel dimension
+        x = obs["image"].unsqueeze(1)  # add channel dimension
         nbatch = len(x)
         x = self.layers(x)
         x = x.view(nbatch, -1)
@@ -179,7 +184,7 @@ config = get_config()
 prior = get_prior(config)
 sigma_n = config.umodel.stochastic_specs["sigma_stat"]
 
-par0 = {k: float(v) for k, v in prior.sample(1).items()}
+par0 = prior.sample(1)
 obs0 = noise(model(par0))
 
 
@@ -193,17 +198,16 @@ if __name__ == "__main__":
 
     print("Testing lens model\n")
 
-    print("Head network output:")
     head = CustomHead(config.umodel.X.shape)
     single_sample = {
         k: torch.tensor(v).unsqueeze(0) for k, v in model(prior.sample(1)).items()
     }
-    print(head(single_sample))
+    print("Head network output:", head(single_sample))
     print("Shape:", head(single_sample).shape, "\n")
 
     print("Guide:\n", config.guide, "\n")
 
-    pred = np.stack([model(prior.sample(1))["mu"] for i in range(n_ppd)], 0).mean(0)
+    pred = np.stack([model(prior.sample(1))["image"] for i in range(n_ppd)], 0).mean(0)
     OBS = config.conditioning["image"].numpy()
     MASK = config.kwargs["defs"]["mask"].numpy()
     err = np.ma.array((pred - OBS) / sigma_n, mask=~MASK)
@@ -223,8 +227,9 @@ if __name__ == "__main__":
 
     fps = 2
     duration = 10  # s
-    shs = [prior.sample(1) for _ in range(duration * fps)]
-    snapshots = [model(sh)["mu"] for sh in shs]
+    # shs = [prior.sample(1) for _ in range(duration * fps)]
+    shs = prior.sample(duration * fps)
+    snapshots = [model(sh)["image"] for sh in shs]
 
     fig = plt.figure(figsize=(4, 4))
 
@@ -238,9 +243,8 @@ if __name__ == "__main__":
         extent=(-2.5, 2.5, -2.5, 2.5),
         origin="lower",
     )
-    scat = plt.scatter(
-        shs[0]["x_sub"], shs[0]["y_sub"], s=10 * np.sqrt(shs[0]["log10_m_sub"]), c="r"
-    )
+    print(shs)
+    scat = plt.scatter(shs[0, 0], shs[0, 1], s=10 * np.sqrt(shs[0, 2]), c="r")
     plt.axis("off")
     plt.tight_layout()
 
@@ -248,8 +252,8 @@ if __name__ == "__main__":
         if i % fps == 0:
             print(".", end="")
         im.set_array(snapshots[i])
-        scat.set_offsets(np.hstack([shs[i]["x_sub"], shs[i]["y_sub"]]))
-        scat.set_sizes(10 * np.sqrt(shs[i]["log10_m_sub"]))
+        scat.set_offsets(shs[i, [0, 1]])
+        scat.set_sizes(10 * np.sqrt(shs[i, [2]]))
         return [im, scat]
 
     anim = animation.FuncAnimation(
